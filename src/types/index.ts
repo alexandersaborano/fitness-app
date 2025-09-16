@@ -1,4 +1,3 @@
-// Tipos existentes
 export type FoodData = {
   id: string;
   name: string;
@@ -18,9 +17,12 @@ export type Meal = {
   foods: Food[];
 };
 
-// Tipos para navegação
+export type DailyMeals = {
+  [date: string]: Meal[];
+};
+
 export type NutritionStackParamList = {
   NutritionHome: undefined;
-  MealDetails: { meal: Meal };
-  AddFood: { mealId: string };
+  MealDetails: { meal: Meal; date: string };
+  AddFood: { mealId: string; date: string };
 };

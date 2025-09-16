@@ -1,18 +1,26 @@
 import React, { useState } from "react";
-import { View, Text, FlatList, Button, Modal, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  FlatList,
+  Button,
+  StyleSheet,
+  TouchableOpacity,
+  Modal,
+} from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import MealCard from "../components/cards/MealCard";
-import AddMealForm from "../components/forms/AddMealForm";
 import MealDetailsScreen from "./MealDetailsScreen";
 import SelectMealModal from "../components/modals/SelectMealModal";
 import foodsData from "../data/foods.json";
 import { globalStyles } from "../theme/globalStyles";
-import type { Food, Meal, FoodData, NutritionStackParamList } from "../types";
+import { colors, spacing, fontSizes } from "../theme/theme";
+import { useNutritionStore } from "../store/useNutritionStore";
+import type { Food, Meal, DailyMeals, NutritionStackParamList } from "../types";
 
 const Stack = createNativeStackNavigator<NutritionStackParamList>();
 
-// Refeições fixas iniciais
-const initialMeals: Meal[] = [
+const getDefaultMeals = (): Meal[] => [
   { id: "breakfast", name: "Pequeno Almoço", foods: [] },
   { id: "snack1", name: "1º Lanche", foods: [] },
   { id: "lunch", name: "Almoço", foods: [] },
@@ -21,50 +29,91 @@ const initialMeals: Meal[] = [
   { id: "supper", name: "Ceia", foods: [] },
 ];
 
+const formatDateForDisplay = (dateString: string): string => {
+  const date = new Date(dateString + "T00:00:00");
+  return date.toLocaleDateString("pt-PT", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+};
+
 function NutritionHomeScreen({ navigation }: any) {
-  const [meals, setMeals] = useState<Meal[]>(initialMeals);
+  const {
+    dailyMeals,
+    currentDate,
+    setCurrentDate,
+    addFood,
+  } = useNutritionStore();
   const [selectMealVisible, setSelectMealVisible] = useState(false);
 
+  const getCurrentMeals = (): Meal[] =>
+    dailyMeals[currentDate] || getDefaultMeals();
+
   const handleMealPress = (meal: Meal) => {
-    navigation.navigate("MealDetails", { meal });
+    navigation.navigate("MealDetails", { meal, date: currentDate });
   };
 
   const handleAddFoodToMeal = (mealId: string, food: Food) => {
-    setMeals((prevMeals) =>
-      prevMeals.map((meal) =>
-        meal.id === mealId
-          ? { ...meal, foods: [...meal.foods, food] }
-          : meal
-      )
-    );
+    addFood(currentDate, mealId, food);
   };
+
+  const changeDate = (days: number) => {
+    const dateObj = new Date(currentDate);
+    dateObj.setDate(dateObj.getDate() + days);
+    setCurrentDate(dateObj.toISOString().split("T")[0]);
+  };
+
+  const goToToday = () => setCurrentDate(new Date().toISOString().split("T")[0]);
 
   return (
     <View style={globalStyles.container}>
-      
-      
+      <Text style={globalStyles.title}>Nutrição</Text>
+
+      <View style={styles.dateNavigation}>
+        <TouchableOpacity
+          style={styles.dateButton}
+          onPress={() => changeDate(-1)}
+        >
+          <Text style={styles.dateButtonText}>◀ Anterior</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.currentDate} onPress={goToToday}>
+          <Text style={styles.currentDateText}>
+            {formatDateForDisplay(currentDate)}
+          </Text>
+          {currentDate !== new Date().toISOString().split("T")[0] && (
+            <Text style={styles.todayHint}>Toque para hoje</Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.dateButton}
+          onPress={() => changeDate(1)}
+        >
+          <Text style={styles.dateButtonText}>Seguinte ▶</Text>
+        </TouchableOpacity>
+      </View>
+
       <FlatList
-        data={meals}
+        data={getCurrentMeals()}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <MealCard 
-            meal={item} 
-            onPress={() => handleMealPress(item)}
-          />
+          <MealCard meal={item} onPress={() => handleMealPress(item)} />
         )}
       />
-      
-      <Button 
-        title="Adicionar Alimento" 
-        onPress={() => setSelectMealVisible(true)} 
+
+      <Button
+        title="Adicionar Alimento"
+        onPress={() => setSelectMealVisible(true)}
       />
 
       <SelectMealModal
         visible={selectMealVisible}
-        meals={meals}
+        meals={getCurrentMeals()}
         onSelectMeal={(mealId) => {
           setSelectMealVisible(false);
-          navigation.navigate("AddFood", { mealId });
         }}
         onClose={() => setSelectMealVisible(false)}
         onAddFood={handleAddFoodToMeal}
@@ -76,17 +125,54 @@ function NutritionHomeScreen({ navigation }: any) {
 export default function Nutrition() {
   return (
     <Stack.Navigator initialRouteName="NutritionHome">
-      <Stack.Screen 
-        name="NutritionHome" 
+      <Stack.Screen
+        name="NutritionHome"
         component={NutritionHomeScreen}
         options={{ title: "Nutrição" }}
       />
-      <Stack.Screen 
-        name="MealDetails" 
+      <Stack.Screen
+        name="MealDetails"
         component={MealDetailsScreen}
         options={{ title: "Detalhes da Refeição" }}
       />
     </Stack.Navigator>
   );
 }
-//tela principal de nutrição com navegação entre refeições e detalhes
+
+const styles = StyleSheet.create({
+  dateNavigation: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.sm,
+  },
+  dateButton: {
+    padding: spacing.sm,
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: "center",
+  },
+  dateButtonText: {
+    color: "#fff",
+    fontSize: fontSizes.small,
+    fontWeight: "bold",
+  },
+  currentDate: {
+    flex: 1,
+    alignItems: "center",
+    marginHorizontal: spacing.sm,
+  },
+  currentDateText: {
+    fontSize: fontSizes.normal,
+    fontWeight: "bold",
+    color: colors.text,
+    textAlign: "center",
+  },
+  todayHint: {
+    fontSize: fontSizes.small,
+    color: colors.muted,
+    textAlign: "center",
+  },
+});

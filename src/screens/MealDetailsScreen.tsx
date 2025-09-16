@@ -1,38 +1,71 @@
-import React from "react";
-import { View, Text, FlatList, StyleSheet } from "react-native";
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  Button,
+} from "react-native";
+import { useNutritionStore } from "../store/useNutritionStore";
 import { colors, spacing, fontSizes, radius } from "../theme/theme";
 import { globalStyles } from "../theme/globalStyles";
 import type { Food } from "../types";
 
-type Props = {
-  route: {
-    params: {
-      meal: {
-        id: string;
-        name: string;
-        foods: Food[];
-      };
-    };
+export default function MealDetailsScreen({ route }: any) {
+  const { meal, date } = route.params;
+  const { removeFood, updateFoodQuantity } = useNutritionStore();
+  const [editIndex, setEditIndex] = useState<number | null>(null);
+  const [quantityText, setQuantityText] = useState("0");
+
+  const handleRemove = (index: number) => {
+    removeFood(date, meal.id, index);
   };
-};
 
-export default function MealDetailsScreen({ route }: Props) {
-  const { meal } = route.params;
+  const handleStartEdit = (index: number, currentQty: number) => {
+    setEditIndex(index);
+    setQuantityText(currentQty.toString());
+  };
 
-  const totalCalories = meal.foods.reduce((sum, f) => sum + (f.calories * f.quantity) / 100, 0).toFixed(0);
-  const totalProtein = meal.foods.reduce((sum, f) => sum + (f.protein * f.quantity) / 100, 0).toFixed(1);
-  const totalCarbs = meal.foods.reduce((sum, f) => sum + (f.carbs * f.quantity) / 100, 0).toFixed(1);
-  const totalFat = meal.foods.reduce((sum, f) => sum + (f.fat * f.quantity) / 100, 0).toFixed(1);
+  const handleConfirmEdit = () => {
+    if (editIndex !== null) {
+      const newQty = parseInt(quantityText) || 0;
+      updateFoodQuantity(date, meal.id, editIndex, newQty);
+      setEditIndex(null);
+    }
+  };
 
-  const renderFoodItem = ({ item }: { item: Food }) => (
+  const renderFoodItem = ({ item, index }: { item: Food; index: number }) => (
     <View style={styles.foodItem}>
-      <Text style={styles.foodName}>{item.name}</Text>
-      <Text style={styles.foodQuantity}>{item.quantity}g</Text>
+      <View style={styles.foodRow}>
+        <Text style={styles.foodName}>{item.name}</Text>
+        <TouchableOpacity onPress={() => handleRemove(index)}>
+          <Text style={styles.removeText}>Remover</Text>
+        </TouchableOpacity>
+      </View>
+
+      {editIndex === index ? (
+        <View style={styles.editRow}>
+          <TextInput
+            style={styles.input}
+            keyboardType="numeric"
+            value={quantityText}
+            onChangeText={setQuantityText}
+          />
+          <Button title="OK" onPress={handleConfirmEdit} />
+        </View>
+      ) : (
+        <TouchableOpacity onPress={() => handleStartEdit(index, item.quantity)}>
+          <Text style={styles.foodQuantity}>{item.quantity}g</Text>
+        </TouchableOpacity>
+      )}
+
       <Text style={styles.foodMacros}>
-        {((item.calories * item.quantity) / 100).toFixed(0)} kcal | 
-        P: {((item.protein * item.quantity) / 100).toFixed(1)}g | 
-        C: {((item.carbs * item.quantity) / 100).toFixed(1)}g | 
-        G: {((item.fat * item.quantity) / 100).toFixed(1)}g
+        {((item.calories * item.quantity) / 100).toFixed(0)} kcal | P:{" "}
+        {((item.protein * item.quantity) / 100).toFixed(1)}g | C:{" "}
+        {((item.carbs * item.quantity) / 100).toFixed(1)}g | G:{" "}
+        {((item.fat * item.quantity) / 100).toFixed(1)}g
       </Text>
     </View>
   );
@@ -40,22 +73,16 @@ export default function MealDetailsScreen({ route }: Props) {
   return (
     <View style={globalStyles.container}>
       <Text style={globalStyles.title}>{meal.name}</Text>
-      
-      <View style={styles.totalsCard}>
-        <Text style={styles.totalsTitle}>Totais</Text>
-        <Text style={styles.totalsText}>
-          Calorias: {totalCalories} kcal | Proteína: {totalProtein}g | 
-          Carbs: {totalCarbs}g | Gordura: {totalFat}g
-        </Text>
-      </View>
+      <Text style={styles.dateText}>
+        {new Date(date + "T00:00:00").toLocaleDateString("pt-PT")}
+      </Text>
 
-      <Text style={styles.foodsTitle}>Alimentos:</Text>
       <FlatList
         data={meal.foods}
-        keyExtractor={(item, index) => `${item.id}-${index}`}
-        renderItem={renderFoodItem}
+        keyExtractor={(_, idx) => idx.toString()}
+        renderItem={({ item, index }) => renderFoodItem({ item, index })}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>Nenhum alimento adicionado ainda.</Text>
+          <Text style={styles.emptyText}>Nenhum alimento adicionado.</Text>
         }
       />
     </View>
@@ -63,27 +90,11 @@ export default function MealDetailsScreen({ route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  totalsCard: {
-    backgroundColor: colors.card,
-    padding: spacing.md,
-    borderRadius: radius.md,
+  dateText: {
+    fontSize: fontSizes.small,
+    color: colors.muted,
+    textAlign: "center",
     marginBottom: spacing.md,
-  },
-  totalsTitle: {
-    fontSize: fontSizes.large,
-    fontWeight: "bold",
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  totalsText: {
-    fontSize: fontSizes.normal,
-    color: colors.text,
-  },
-  foodsTitle: {
-    fontSize: fontSizes.large,
-    fontWeight: "bold",
-    color: colors.text,
-    marginBottom: spacing.sm,
   },
   foodItem: {
     backgroundColor: colors.card,
@@ -91,14 +102,36 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     marginBottom: spacing.sm,
   },
+  foodRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
   foodName: {
     fontSize: fontSizes.normal,
     fontWeight: "bold",
     color: colors.text,
   },
-  foodQuantity: {
+  removeText: {
+    color: colors.danger,
     fontSize: fontSizes.small,
-    color: colors.muted,
+  },
+  editRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: spacing.xs,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: radius.sm,
+    padding: spacing.xs,
+    width: 80,
+    marginRight: spacing.sm,
+  },
+  foodQuantity: {
+    fontSize: fontSizes.normal,
+    color: colors.primary,
+    marginVertical: spacing.xs,
   },
   foodMacros: {
     fontSize: fontSizes.small,
@@ -111,4 +144,3 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
 });
-// Tela de detalhes da refeição, mostrando alimentos e totais nutricionais
